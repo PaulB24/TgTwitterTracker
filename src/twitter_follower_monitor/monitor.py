@@ -137,7 +137,7 @@ class FollowerMonitor:
         self._is_running = True
         options = webdriver.ChromeOptions()
         options.add_argument("--start-maximized")
-        #options.add_argument("--headless")  
+        options.add_argument("--headless")  
         
         driver = webdriver.Chrome(options=options)
         
