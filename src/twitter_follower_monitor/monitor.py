@@ -44,12 +44,13 @@ class FollowerMonitor:
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
         email_field.send_keys(self.twitter_email)
         email_field.send_keys(Keys.RETURN)
-        
-        
+        print("Email field sent")
+        time.sleep(2)
 
         password_field = wait.until(EC.presence_of_element_located((By.NAME, "password")))
         password_field.send_keys(self.twitter_password)
         password_field.send_keys(Keys.RETURN)
+        print("Password field sent")
 
         time.sleep(2)  
 
