@@ -43,41 +43,75 @@ class FollowerMonitor:
         driver.get("https://twitter.com/login")
         wait = WebDriverWait(driver, 10)
 
+        # Print initial page content
+        print(f"Current URL: {driver.current_url}")
+        print(f"Page source preview: {driver.page_source[:500]}")
+
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
         email_field.send_keys(self.twitter_username)
         email_field.send_keys(Keys.RETURN)
         print("Email field sent")
         time.sleep(2)
+
+        # Print page state after email
+        print(f"URL after email: {driver.current_url}")
+        print("Available input fields:", [elem.get_attribute("name") for elem in driver.find_elements(By.TAG_NAME, "input")])
+
         try:
-            print("Sending email again")
+            print("Checking for additional email verification...")
             email_again = wait.until(EC.presence_of_element_located((By.NAME, "text")))
+            print("Additional email field found")
             email_again.send_keys(self.twitter_email)
             email_again.send_keys(Keys.RETURN)
-        except:
-            pass
-        password_field = wait.until(EC.presence_of_element_located((By.NAME, "password")))
-        password_field.send_keys(self.twitter_password)
-        password_field.send_keys(Keys.RETURN)
-        print("Password field sent")
+        except Exception as e:
+            print(f"No additional email field needed: {str(e)}")
+
+        # Print page state before password
+        print(f"URL before password: {driver.current_url}")
+        print("Current form fields:", [elem.get_attribute("name") for elem in driver.find_elements(By.TAG_NAME, "input")])
+
         try:
-            print("Sending email again")
+            password_field = wait.until(EC.presence_of_element_located((By.NAME, "password")))
+            print("Password field found")
+            password_field.send_keys(self.twitter_password)
+            password_field.send_keys(Keys.RETURN)
+            print("Password field sent")
+        except Exception as e:
+            print(f"Error finding password field: {str(e)}")
+            print(f"Current page content preview: {driver.page_source[:500]}")
+
+        time.sleep(2)
+        print(f"URL after password: {driver.current_url}")
+        print("Available buttons:", [btn.text for btn in driver.find_elements(By.TAG_NAME, "button")])
+
+        try:
+            print("Checking for unexpected email field...")
             email_again = wait.until(EC.presence_of_element_located((By.NAME, "text")))
+            print("Found unexpected email field, attempting to handle...")
             email_again.send_keys(self.twitter_email)
             email_again.send_keys(Keys.RETURN)
-        except:
-            pass
-        time.sleep(5)  
+        except Exception as e:
+            print(f"No unexpected email field: {str(e)}")
+
+        time.sleep(5)
+
+        # Print verification state
+        print(f"Current URL before verification: {driver.current_url}")
+        print("Current visible text:", [elem.text for elem in driver.find_elements(By.TAG_NAME, "span") if elem.text])
 
         try:
             code = input("Enter verification code: ")
             verification_code_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
             verification_code_field.send_keys(code)
             verification_code_field.send_keys(Keys.RETURN)
-        except:
-            pass
-        
+        except Exception as e:
+            print(f"Verification code step skipped: {str(e)}")
+
         time.sleep(5)
+        print(f"Final URL: {driver.current_url}")
+        
         if "login" in driver.current_url:
+            print("Final page content:", driver.page_source[:500])
             raise Exception("Login failed - please check credentials")
 
     def _get_following(self, driver: webdriver.Chrome, username: str) -> int:
