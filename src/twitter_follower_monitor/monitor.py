@@ -45,12 +45,6 @@ class FollowerMonitor:
         email_field.send_keys(self.twitter_email)
         email_field.send_keys(Keys.RETURN)
         
-        try:
-            username_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
-            username_field.send_keys(self.twitter_email.split('@')[0])
-            username_field.send_keys(Keys.RETURN)
-        except:
-            pass
 
         password_field = wait.until(EC.presence_of_element_located((By.NAME, "password")))
         password_field.send_keys(self.twitter_password)
