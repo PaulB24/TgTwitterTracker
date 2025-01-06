@@ -45,13 +45,23 @@ class FollowerMonitor:
         email_field.send_keys(self.twitter_email)
         email_field.send_keys(Keys.RETURN)
         
+        
 
         password_field = wait.until(EC.presence_of_element_located((By.NAME, "password")))
         password_field.send_keys(self.twitter_password)
         password_field.send_keys(Keys.RETURN)
 
-        time.sleep(5)  
+        time.sleep(2)  
+
+        try:
+            code = input("Enter verification code: ")
+            verification_code_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
+            verification_code_field.send_keys(code)
+            verification_code_field.send_keys(Keys.RETURN)
+        except:
+            pass
         
+        time.sleep(5)
         if "login" in driver.current_url:
             raise Exception("Login failed - please check credentials")
 
