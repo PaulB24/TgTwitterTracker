@@ -42,57 +42,46 @@ class FollowerMonitor:
         self._browser_lock = Lock()
         self.cookies_dir = Path("twitter_cookies")
         self.cookies_dir.mkdir(exist_ok=True)
+        self.cookie_file = self.cookies_dir / f"cookies_{twitter_username}.pkl"
 
-    def _save_cookies(self, driver: webdriver.Chrome, identifier: str) -> None:
-        """Save cookies to file."""
-        cookie_file = self.cookies_dir / f"cookies_{identifier}.pkl"
-        pickle.dump(driver.get_cookies(), cookie_file.open("wb"))
-        print(f"Cookies saved for instance {identifier}")
+    def _save_cookies(self, driver: webdriver.Chrome) -> None:
+        pickle.dump(driver.get_cookies(), self.cookie_file.open("wb"))
+        print("Cookies saved successfully")
 
-    def _load_cookies(self, driver: webdriver.Chrome, identifier: str) -> bool:
-        """Load cookies from file and return True if successful and cookies are valid."""
-        cookie_file = self.cookies_dir / f"cookies_{identifier}.pkl"
-        
-        if not cookie_file.exists():
+    def _load_cookies(self, driver: webdriver.Chrome) -> bool:
+        if not self.cookie_file.exists():
             return False
 
         try:
-            # Load cookies
-            cookies = pickle.load(cookie_file.open("rb"))
+            cookies = pickle.load(self.cookie_file.open("rb"))
             
-            # Visit Twitter first (required to set cookies)
             driver.get("https://twitter.com")
             
-            # Add cookies to browser
             for cookie in cookies:
                 try:
                     driver.add_cookie(cookie)
                 except Exception as e:
                     print(f"Error adding cookie: {str(e)}")
 
-            # Test if cookies are valid by visiting Twitter
             driver.get("https://twitter.com/home")
             time.sleep(3)
 
-            # Check if we're still on login page
             if "login" in driver.current_url:
                 print("Cookies expired or invalid")
-                cookie_file.unlink()  # Delete invalid cookies
+                self.cookie_file.unlink()  
                 return False
 
-            print(f"Successfully loaded cookies for instance {identifier}")
+            print("Successfully loaded cookies")
             return True
 
         except Exception as e:
             print(f"Error loading cookies: {str(e)}")
             return False
 
-    def _login(self, driver: webdriver.Chrome, instance_id: str = "default") -> None:
-        """Login to Twitter with cookie support."""
+    def _login(self, driver: webdriver.Chrome) -> None:
         print("Attempting to login...")
 
-        # Try to use existing cookies first
-        if self._load_cookies(driver, instance_id):
+        if self._load_cookies(driver):
             print("Logged in successfully using cookies")
             return
 
@@ -126,11 +115,9 @@ class FollowerMonitor:
         if "login" in driver.current_url:
             print("Final page content:", driver.page_source[:500])
             raise Exception("Login failed - please check credentials")
-
-        # After successful login, save cookies
-        time.sleep(5)  # Wait for any post-login redirects
+        time.sleep(5)  
         if "login" not in driver.current_url:
-            self._save_cookies(driver, instance_id)
+            self._save_cookies(driver)
         else:
             raise Exception("Login failed - please check credentials")
 
@@ -180,25 +167,24 @@ class FollowerMonitor:
     def _initialize_browser_pool(self, usernames: List[str]) -> Dict[webdriver.Chrome, List[str]]:
         browser_assignments: Dict[webdriver.Chrome, List[str]] = {}
         options = webdriver.ChromeOptions()
-        CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
-        service = Service(CHROMEDRIVER_PATH)
+        #CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
+        #service = Service(CHROMEDRIVER_PATH)
 
         options.add_argument("--start-maximized")
         options.add_argument("--headless")
         options.add_argument('--no-sandbox')
 
-        # Create browser instances with unique IDs
+        # Create browser instances
         for i in range(0, len(usernames), 5):
-            instance_id = f"instance_{i//5}"
             user_group = usernames[i:i+5]
-            driver = webdriver.Chrome(service=service, options=options)
+            driver = webdriver.Chrome( options=options)
             
             try:
-                self._login(driver, instance_id)
+                self._login(driver)  # No instance_id needed anymore
                 browser_assignments[driver] = user_group
                 self._browser_pool.append(driver)
             except Exception as e:
-                print(f"Failed to initialize browser instance {instance_id}: {str(e)}")
+                print(f"Failed to initialize browser instance for group {i//5}: {str(e)}")
                 driver.quit()
                 continue
 
@@ -248,6 +234,59 @@ class FollowerMonitor:
         except Exception as e:
             print(f"Error in browser instance monitoring group {usernames}: {str(e)}")
 
+    def _reorganize_browser_assignments(
+        self, 
+        current_assignments: Dict[webdriver.Chrome, List[str]], 
+        all_usernames: List[str]
+    ) -> Dict[webdriver.Chrome, List[str]]:
+        """Reorganize browser assignments when users are added/removed."""
+        
+        # Get all current browsers and usernames
+        current_browsers = list(current_assignments.keys())
+        monitored_users = set(sum(current_assignments.values(), []))
+        new_users = [u for u in all_usernames if u not in monitored_users]
+        
+        if not new_users:
+            return current_assignments
+        
+        new_assignments: Dict[webdriver.Chrome, List[str]] = {}
+        
+        # First, fill existing browsers that aren't at capacity
+        for browser in current_browsers:
+            current_users = current_assignments[browser]
+            available_slots = 5 - len(current_users)
+            
+            if available_slots > 0:
+                users_to_add = new_users[:available_slots]
+                new_users = new_users[available_slots:]  # Remove assigned users
+                new_assignments[browser] = current_users + users_to_add
+            else:
+                new_assignments[browser] = current_users
+        
+        if new_users:
+            options = webdriver.ChromeOptions()
+            #CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
+            #service = Service(CHROMEDRIVER_PATH)
+
+            options.add_argument("--start-maximized")
+            options.add_argument("--headless")
+            options.add_argument('--no-sandbox')
+            
+            for i in range(0, len(new_users), 5):
+                user_group = new_users[i:i+5]
+                driver = webdriver.Chrome( options=options)
+                
+                try:
+                    self._login(driver)
+                    new_assignments[driver] = user_group
+                    self._browser_pool.append(driver)
+                except Exception as e:
+                    print(f"Failed to initialize browser instance for new group: {str(e)}")
+                    driver.quit()
+                    continue
+        
+        return new_assignments
+
     def start_monitoring(self, usernames: List[str]) -> None:
         self._is_running = True
         
@@ -255,15 +294,17 @@ class FollowerMonitor:
             print("Initializing browser pool...")
             browser_assignments = self._initialize_browser_pool(usernames)
 
-            with ThreadPoolExecutor(max_workers=len(browser_assignments)) as executor:
+            with ThreadPoolExecutor() as executor:
                 while self._is_running:
                     current_usernames = self.db_manager.get_all_users()
                     
+                    # Check if user list has changed
                     if set(current_usernames) != set(sum(browser_assignments.values(), [])):
-                        for driver in self._browser_pool:
-                            driver.quit()
-                        self._browser_pool.clear()
-                        browser_assignments = self._initialize_browser_pool(current_usernames)
+                        print("User list changed, reorganizing browser assignments...")
+                        browser_assignments = self._reorganize_browser_assignments(
+                            browser_assignments, 
+                            current_usernames
+                        )
                     
                     futures = [
                         executor.submit(self._monitor_user_group, driver, users)
