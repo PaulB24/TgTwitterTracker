@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-
+from selenium.webdriver.chrome.service import Service
 from .notifications import NotificationService
 from .database import DatabaseManager
 from bs4 import BeautifulSoup
@@ -107,12 +107,16 @@ class FollowerMonitor:
     def _initialize_browser_pool(self, usernames: List[str]) -> Dict[webdriver.Chrome, List[str]]:
         browser_assignments: Dict[webdriver.Chrome, List[str]] = {}
         options = webdriver.ChromeOptions()
+        CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
+        service = Service(CHROMEDRIVER_PATH)
+
         options.add_argument("--start-maximized")
         options.add_argument("--headless")
+        options.add_argument('--no-sandbox')
 
         for i in range(0, len(usernames), 5):
             user_group = usernames[i:i+5]
-            driver = webdriver.Chrome(options=options)
+            driver = webdriver.Chrome(service=service, options=options)
             self._login(driver)
             browser_assignments[driver] = user_group
             self._browser_pool.append(driver)
