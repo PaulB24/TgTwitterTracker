@@ -136,17 +136,43 @@ class TwitterMonitorBot:
         await update.message.reply_text("\n".join(response))
 
     async def remove_user(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-
         if not await self._check_auth(update):
             return
 
         if not context.args:
-            await update.message.reply_text("Please provide a username!")
+            await update.message.reply_text("Please provide one or more usernames!")
             return
 
-        username = context.args[0].strip('@')
-        self.db_manager.remove_user(username)
-        await update.message.reply_text(f"Removed @{username} from monitoring list!")
+        existing_users = self.db_manager.get_all_users()
+        for username in context.args:
+            if username.strip('@') not in existing_users:
+                await update.message.reply_text(f"User @{username} does not exist in the database.")
+                return
+        removed_users = []
+        failed_users = []
+
+        for username in context.args:
+            username = username.strip('@')
+            try:
+                self.db_manager.remove_user(username)
+                removed_users.append(username)
+            except Exception as e:
+                failed_users.append(username)
+                print(f"Failed to remove user {username}: {str(e)}")
+
+        response = []
+        if removed_users:
+            users_list = ", ".join(f"@{user}" for user in removed_users)
+            response.append(f"Removed users: {users_list}")
+        
+        if failed_users:
+            users_list = ", ".join(f"@{user}" for user in failed_users)
+            response.append(f"Failed to remove users: {users_list}")
+        
+        if not response:
+            response.append("No users were removed")
+
+        await update.message.reply_text("\n".join(response))
 
     async def list_users(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
@@ -171,7 +197,6 @@ class TwitterMonitorBot:
         username = context.args[0].strip('@')
         
         try:
-            # Get following count from database
             count = self.db_manager.get_following_count(username)
             if count is not None:
                 await update.message.reply_text(
