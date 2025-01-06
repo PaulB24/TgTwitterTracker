@@ -148,6 +148,7 @@ class FollowerMonitor:
 
             for username in usernames:
                 try:
+                    time.sleep(self.check_interval)
                     self._known_follows[username] = self._get_following(driver, username)
                     print(f"Initial following count for {username}: {self._known_follows[username]}")
                 except Exception as e:
@@ -159,6 +160,7 @@ class FollowerMonitor:
                     current_usernames = self.db_manager.get_all_users()
                     
                     for username in current_usernames:
+                        time.sleep(self.check_interval)
                         try:
                             if username not in self._known_follows:
                                 try:
