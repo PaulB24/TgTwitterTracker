@@ -2,6 +2,9 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from typing import List, Dict, Optional
 from threading import Lock
+import pickle
+import os
+from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -37,15 +40,66 @@ class FollowerMonitor:
         self._is_running: bool = False
         self._browser_pool: List[webdriver.Chrome] = []
         self._browser_lock = Lock()
+        self.cookies_dir = Path("twitter_cookies")
+        self.cookies_dir.mkdir(exist_ok=True)
 
-    def _login(self, driver: webdriver.Chrome) -> None:
-        print("Logging into Twitter...")
+    def _save_cookies(self, driver: webdriver.Chrome, identifier: str) -> None:
+        """Save cookies to file."""
+        cookie_file = self.cookies_dir / f"cookies_{identifier}.pkl"
+        pickle.dump(driver.get_cookies(), cookie_file.open("wb"))
+        print(f"Cookies saved for instance {identifier}")
+
+    def _load_cookies(self, driver: webdriver.Chrome, identifier: str) -> bool:
+        """Load cookies from file and return True if successful and cookies are valid."""
+        cookie_file = self.cookies_dir / f"cookies_{identifier}.pkl"
+        
+        if not cookie_file.exists():
+            return False
+
+        try:
+            # Load cookies
+            cookies = pickle.load(cookie_file.open("rb"))
+            
+            # Visit Twitter first (required to set cookies)
+            driver.get("https://twitter.com")
+            
+            # Add cookies to browser
+            for cookie in cookies:
+                try:
+                    driver.add_cookie(cookie)
+                except Exception as e:
+                    print(f"Error adding cookie: {str(e)}")
+
+            # Test if cookies are valid by visiting Twitter
+            driver.get("https://twitter.com/home")
+            time.sleep(3)
+
+            # Check if we're still on login page
+            if "login" in driver.current_url:
+                print("Cookies expired or invalid")
+                cookie_file.unlink()  # Delete invalid cookies
+                return False
+
+            print(f"Successfully loaded cookies for instance {identifier}")
+            return True
+
+        except Exception as e:
+            print(f"Error loading cookies: {str(e)}")
+            return False
+
+    def _login(self, driver: webdriver.Chrome, instance_id: str = "default") -> None:
+        """Login to Twitter with cookie support."""
+        print("Attempting to login...")
+
+        # Try to use existing cookies first
+        if self._load_cookies(driver, instance_id):
+            print("Logged in successfully using cookies")
+            return
+
+        print("No valid cookies found, performing full login...")
         driver.get("https://twitter.com/login")
         wait = WebDriverWait(driver, 10)
 
-        # Print initial page content
-        print(f"Current URL: {driver.current_url}")
-        print(f"Page source preview: {driver.page_source[:500]}")
 
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
         email_field.send_keys(self.twitter_username)
@@ -53,22 +107,6 @@ class FollowerMonitor:
         print("Email field sent")
         time.sleep(2)
 
-        # Print page state after email
-        print(f"URL after email: {driver.current_url}")
-        print("Available input fields:", [elem.get_attribute("name") for elem in driver.find_elements(By.TAG_NAME, "input")])
-
-        try:
-            print("Checking for additional email verification...")
-            email_again = wait.until(EC.presence_of_element_located((By.NAME, "text")))
-            print("Additional email field found")
-            email_again.send_keys(self.twitter_email)
-            email_again.send_keys(Keys.RETURN)
-        except Exception as e:
-            print(f"No additional email field needed: {str(e)}")
-
-        # Print page state before password
-        print(f"URL before password: {driver.current_url}")
-        print("Current form fields:", [elem.get_attribute("name") for elem in driver.find_elements(By.TAG_NAME, "input")])
 
         try:
             password_field = wait.until(EC.presence_of_element_located((By.NAME, "password")))
@@ -80,38 +118,20 @@ class FollowerMonitor:
             print(f"Error finding password field: {str(e)}")
             print(f"Current page content preview: {driver.page_source[:500]}")
 
-        time.sleep(2)
-        print(f"URL after password: {driver.current_url}")
-        print("Available buttons:", [btn.text for btn in driver.find_elements(By.TAG_NAME, "button")])
 
-        try:
-            print("Checking for unexpected email field...")
-            email_again = wait.until(EC.presence_of_element_located((By.NAME, "text")))
-            print("Found unexpected email field, attempting to handle...")
-            email_again.send_keys(self.twitter_email)
-            email_again.send_keys(Keys.RETURN)
-        except Exception as e:
-            print(f"No unexpected email field: {str(e)}")
-
-        time.sleep(5)
-
-        # Print verification state
-        print(f"Current URL before verification: {driver.current_url}")
-        print("Current visible text:", [elem.text for elem in driver.find_elements(By.TAG_NAME, "span") if elem.text])
-
-        try:
-            code = input("Enter verification code: ")
-            verification_code_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
-            verification_code_field.send_keys(code)
-            verification_code_field.send_keys(Keys.RETURN)
-        except Exception as e:
-            print(f"Verification code step skipped: {str(e)}")
 
         time.sleep(5)
         print(f"Final URL: {driver.current_url}")
         
         if "login" in driver.current_url:
             print("Final page content:", driver.page_source[:500])
+            raise Exception("Login failed - please check credentials")
+
+        # After successful login, save cookies
+        time.sleep(5)  # Wait for any post-login redirects
+        if "login" not in driver.current_url:
+            self._save_cookies(driver, instance_id)
+        else:
             raise Exception("Login failed - please check credentials")
 
     def _get_following(self, driver: webdriver.Chrome, username: str) -> int:
@@ -167,12 +187,20 @@ class FollowerMonitor:
         options.add_argument("--headless")
         options.add_argument('--no-sandbox')
 
+        # Create browser instances with unique IDs
         for i in range(0, len(usernames), 5):
+            instance_id = f"instance_{i//5}"
             user_group = usernames[i:i+5]
             driver = webdriver.Chrome(service=service, options=options)
-            self._login(driver)
-            browser_assignments[driver] = user_group
-            self._browser_pool.append(driver)
+            
+            try:
+                self._login(driver, instance_id)
+                browser_assignments[driver] = user_group
+                self._browser_pool.append(driver)
+            except Exception as e:
+                print(f"Failed to initialize browser instance {instance_id}: {str(e)}")
+                driver.quit()
+                continue
 
         return browser_assignments
 
