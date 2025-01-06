@@ -16,6 +16,7 @@ def main() -> None:
     bot = TwitterMonitorBot(
         telegram_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         twitter_email=os.getenv("TWITTER_EMAIL", ""),
+        twitter_username=os.getenv("TWITTER_USERNAME", ""),
         twitter_password=os.getenv("TWITTER_PASSWORD", ""),
         authorized_users=authorized_users,
         check_interval=int(os.getenv("CHECK_INTERVAL", "10"))

@@ -20,6 +20,7 @@ class FollowerMonitor:
         notifier: NotificationService, 
         check_interval: int,
         twitter_email: str,
+        twitter_username: str,
         twitter_password: str,
         db_manager: DatabaseManager,
         max_workers: int = 5  # Number of concurrent browsers
@@ -28,6 +29,7 @@ class FollowerMonitor:
         self.notifier = notifier
         self.check_interval = check_interval
         self.twitter_email = twitter_email
+        self.twitter_username = twitter_username
         self.twitter_password = twitter_password
         self.db_manager = db_manager
         self.max_workers = max_workers
@@ -42,7 +44,7 @@ class FollowerMonitor:
         wait = WebDriverWait(driver, 10)
 
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
-        email_field.send_keys(self.twitter_email)
+        email_field.send_keys(self.twitter_username)
         email_field.send_keys(Keys.RETURN)
         print("Email field sent")
         time.sleep(2)
@@ -57,8 +59,14 @@ class FollowerMonitor:
         password_field.send_keys(self.twitter_password)
         password_field.send_keys(Keys.RETURN)
         print("Password field sent")
-
-        time.sleep(2)  
+        try:
+            print("Sending email again")
+            email_again = wait.until(EC.presence_of_element_located((By.NAME, "text")))
+            email_again.send_keys(self.twitter_email)
+            email_again.send_keys(Keys.RETURN)
+        except:
+            pass
+        time.sleep(5)  
 
         try:
             code = input("Enter verification code: ")

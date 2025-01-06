@@ -17,6 +17,7 @@ class TwitterMonitorBot:
     def __init__(
         self,
         telegram_token: str,
+        twitter_username: str,
         twitter_email: str,
         twitter_password: str,
         authorized_users: List[str],
@@ -24,6 +25,7 @@ class TwitterMonitorBot:
     ) -> None:
 
         self.telegram_token = telegram_token
+        self.twitter_username = twitter_username
         self.twitter_email = twitter_email
         self.twitter_password = twitter_password
         self.check_interval = check_interval
@@ -64,6 +66,7 @@ class TwitterMonitorBot:
         self.monitor = FollowerMonitor(
             notifier=notifier,
             check_interval=self.check_interval,
+            twitter_username=self.twitter_username,
             twitter_email=self.twitter_email,
             twitter_password=self.twitter_password,
             db_manager=self.db_manager
