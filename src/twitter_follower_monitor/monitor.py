@@ -116,62 +116,19 @@ class FollowerMonitor:
             driver.get(f"https://twitter.com/{username}/following")
             time.sleep(5)  
 
-            with open(f"debug_{username}_page.html", "w", encoding='utf-8') as f:
-                f.write(driver.page_source)
+            xpath = '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[2]/div/a/div/div/span'
 
-            possible_xpaths = [
-                '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[2]/div/a/div/div/span',
-                '//div[@data-testid="primaryColumn"]//span[contains(@class, "css-1jxf684")]',
-                '//div[@data-testid="cellInnerDiv"][1]//span[contains(@class, "css-1jxf684")]'
-            ]
-
-            print("Debug: Looking for elements with css-1jxf684 class")
-            elements = driver.find_elements(By.CLASS_NAME, "css-1jxf684")
-            print(f"Found {len(elements)} elements with css-1jxf684 class")
-            for idx, elem in enumerate(elements):
-                print(f"Element {idx} text: {elem.text}")
-                print(f"Element {idx} HTML: {elem.get_attribute('outerHTML')}")
-
-            for xpath in possible_xpaths:
-                print(f"Trying XPath: {xpath}")
-                try:
-                    element = WebDriverWait(driver, 3).until(
-                        EC.presence_of_element_located((By.XPATH, xpath))
-                    )
-                    print(f"Found element using {xpath}")
-                    print(f"Element text: {element.text}")
-                    print(f"Element HTML: {element.get_attribute('outerHTML')}")
+            element = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.XPATH, xpath)))
                     
-                    if element.text.strip():
-                        username_text = element.text.strip()
-                        if username_text.startswith('@'):
-                            return username_text[1:]
-                        return username_text
-                except Exception as e:
-                    print(f"XPath {xpath} failed: {str(e)}")
-
-            print("Trying class-based approach...")
-            elements = driver.find_elements(By.CLASS_NAME, "css-175oi2r")
-            if elements:
-                for element in elements[:5]:  # Check first 5 elements
-                    print(f"Checking element HTML: {element.get_attribute('outerHTML')}")
-                    try:
-                        username_span = element.find_element(By.CLASS_NAME, "css-1jxf684")
-                        if username_span.text.strip():
-                            return username_span.text.strip().lstrip('@')
-                    except:
-                        continue
-
-            print("No username found with any method")
-            return None
-
+            if element.text.strip():
+                username_text = element.text.strip()
+                if username_text.startswith('@'):
+                    return username_text[1:]
+                return username_text
         except Exception as e:
-            print(f"Error getting latest follow for {username}: {str(e)}")
-            try:
-                driver.save_screenshot(f"error_{username}.png")
-            except:
-                print("Failed to save screenshot")
+            print(f"XPath {xpath} failed: {str(e)}")
             return None
+
 
     def stop_monitoring(self) -> None:
         self._is_running = False
