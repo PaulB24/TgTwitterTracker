@@ -2,7 +2,7 @@ import time
 import json
 import os
 from pathlib import Path
-from typing import  List, Dict, Optional
+from typing import List, Dict, Optional
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -35,6 +35,8 @@ class FollowerMonitor:
         self._known_follows: Dict[str, int] = {}
         self._is_running: bool = False
         self.cookies_file = Path("twitter_cookies.json")
+        self._consecutive_errors = 0
+        self._max_consecutive_errors = 10
 
     def _save_cookies(self, driver: webdriver.Chrome) -> None:
         cookies = driver.get_cookies()
@@ -129,21 +131,31 @@ class FollowerMonitor:
             print(f"XPath {xpath} failed: {str(e)}")
             return None
 
-
-    def stop_monitoring(self) -> None:
-        self._is_running = False
-
-    def start_monitoring(self, usernames: List[str]) -> None:
-        self._is_running = True
+    def _initialize_driver(self) -> webdriver.Chrome:
         options = webdriver.ChromeOptions()
         options.add_argument("--start-maximized")
         options.add_argument("--headless")  
         options.add_argument('--no-sandbox')
         
         driver = webdriver.Chrome(options=options)
+        self._login(driver)
+        return driver
+
+    def _restart_driver(self, driver: webdriver.Chrome) -> webdriver.Chrome:
+        try:
+            driver.quit()
+        except:
+            pass
+        return self._initialize_driver()
+
+    def stop_monitoring(self) -> None:
+        self._is_running = False
+
+    def start_monitoring(self, usernames: List[str]) -> None:
+        self._is_running = True
+        driver = self._initialize_driver()
         
         try:
-            self._login(driver)
             print("Login successful!")
 
             for username in usernames:
@@ -151,8 +163,13 @@ class FollowerMonitor:
                     time.sleep(self.check_interval)
                     self._known_follows[username] = self._get_following(driver, username)
                     print(f"Initial following count for {username}: {self._known_follows[username]}")
+                    self._consecutive_errors = 0
                 except Exception as e:
                     print(f"Failed to get initial count for {username}: {str(e)}")
+                    self._consecutive_errors += 1
+                    if self._consecutive_errors >= self._max_consecutive_errors:
+                        driver = self._restart_driver(driver)
+                        self._consecutive_errors = 0
                     continue
             
             while self._is_running:
@@ -166,9 +183,14 @@ class FollowerMonitor:
                                 try:
                                     self._known_follows[username] = self._get_following(driver, username)
                                     print(f"New user added - Initial following count for {username}: {self._known_follows[username]}")
+                                    self._consecutive_errors = 0
                                     continue
                                 except Exception as e:
                                     print(f"Failed to get initial count for new user {username}: {str(e)}")
+                                    self._consecutive_errors += 1
+                                    if self._consecutive_errors >= self._max_consecutive_errors:
+                                        driver = self._restart_driver(driver)
+                                        self._consecutive_errors = 0
                                     continue
 
                             current_follows = self._get_following(driver, username)
@@ -192,16 +214,27 @@ class FollowerMonitor:
                             
                             self._known_follows[username] = current_follows
                             self.db_manager.update_follower_count(username, current_follows)
+                            self._consecutive_errors = 0
 
-                            
                         except Exception as e:
                             print(f"Error monitoring {username}: {str(e)}")
+                            self._consecutive_errors += 1
+                            if self._consecutive_errors >= self._max_consecutive_errors:
+                                driver = self._restart_driver(driver)
+                                self._consecutive_errors = 0
                             continue
-                        
                     
                 except Exception as e:
                     self.notifier.notify(f"Error in monitoring loop: {str(e)}")
+                    self._consecutive_errors += 1
+                    if self._consecutive_errors >= self._max_consecutive_errors:
+                        driver = self._restart_driver(driver)
+                        self._consecutive_errors = 0
                     time.sleep(self.check_interval)
                     
         finally:
-            driver.quit() 
+            self._is_running = False
+            try:
+                driver.quit()
+            except:
+                pass 
