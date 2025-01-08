@@ -67,7 +67,7 @@ class FollowerMonitor:
 
         print("Logging into Twitter...")
         driver.get("https://twitter.com/login")
-        
+        time.sleep(5)
         with open("login_page_initial.html", "w", encoding='utf-8') as f:
             f.write(driver.page_source)
         
@@ -149,19 +149,43 @@ class FollowerMonitor:
     def _initialize_driver(self) -> webdriver.Chrome:
         options = webdriver.ChromeOptions()
         options.add_argument("--start-maximized")
-        options.add_argument("--headless")  
+        options.add_argument("--headless")
         options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument("--remote-debugging-port=9222")
+        options.add_argument('--window-size=1920,1080')
+        options.page_load_timeout = 30
+        options.set_capability("pageLoadStrategy", "eager")
         
-        driver = webdriver.Chrome(options=options)
-        self._login(driver)
-        return driver
+        service = webdriver.ChromeService()
+        driver = webdriver.Chrome(service=service, options=options)
+        
+        try:
+            self._login(driver)
+            return driver
+        except Exception as e:
+            try:
+                driver.quit()
+            except:
+                pass
+            raise e
 
     def _restart_driver(self, driver: webdriver.Chrome) -> webdriver.Chrome:
-        try:
-            driver.quit()
-        except:
-            pass
-        return self._initialize_driver()
+        for _ in range(3):
+            try:
+                old_driver = driver
+                new_driver = self._initialize_driver()
+                try:
+                    old_driver.quit()
+                except:
+                    pass
+                return new_driver
+            except Exception as e:
+                print(f"Failed to restart driver, attempt {_ + 1}: {str(e)}")
+                time.sleep(5)
+        
+        raise Exception("Failed to restart Chrome driver after 3 attempts")
 
     def stop_monitoring(self) -> None:
         self._is_running = False
@@ -240,7 +264,8 @@ class FollowerMonitor:
                             continue
                     
                 except Exception as e:
-                    self.notifier.notify(f"Error in monitoring loop: {str(e)}")
+                    #self.notifier.notify(f"Error in monitoring loop: {str(e)}")
+                    print(f"Error in monitoring loop: {str(e)}")
                     self._consecutive_errors += 1
                     if self._consecutive_errors >= self._max_consecutive_errors:
                         driver = self._restart_driver(driver)
