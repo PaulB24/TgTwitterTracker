@@ -67,16 +67,27 @@ class FollowerMonitor:
 
         print("Logging into Twitter...")
         driver.get("https://twitter.com/login")
+        
+        with open("login_page_initial.html", "w", encoding='utf-8') as f:
+            f.write(driver.page_source)
+        
         wait = WebDriverWait(driver, 10)
 
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
         email_field.send_keys(self.twitter_username)
         email_field.send_keys(Keys.RETURN)
         
+        time.sleep(2)
+        with open("login_page_after_username.html", "w", encoding='utf-8') as f:
+            f.write(driver.page_source)
+        
         try:
             username_field = wait.until(EC.presence_of_element_located((By.NAME, "text")))
             username_field.send_keys(self.twitter_email.split('@')[0])
             username_field.send_keys(Keys.RETURN)
+            time.sleep(2)
+            with open("login_page_after_email.html", "w", encoding='utf-8') as f:
+                f.write(driver.page_source)
         except:
             pass
 
@@ -84,9 +95,13 @@ class FollowerMonitor:
         password_field.send_keys(self.twitter_password)
         password_field.send_keys(Keys.RETURN)
 
-        time.sleep(5)  
+        time.sleep(5)
+        with open("login_page_after_password.html", "w", encoding='utf-8') as f:
+            f.write(driver.page_source)
         
         if "login" in driver.current_url:
+            with open("login_failed_page.html", "w", encoding='utf-8') as f:
+                f.write(driver.page_source)
             raise Exception("Login failed - please check credentials")
         
         print("Saving session cookies...")
