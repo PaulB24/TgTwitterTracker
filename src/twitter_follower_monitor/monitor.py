@@ -1,6 +1,5 @@
 import time
 import json
-import os
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -11,6 +10,9 @@ def setup_logging() -> None:
     log_dir.mkdir(exist_ok=True)
     
     log_file = log_dir / f"monitor_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     
     logging.basicConfig(
         level=logging.INFO,
@@ -180,8 +182,34 @@ class FollowerMonitor:
                 if username_text.startswith('@'):
                     return username_text[1:]
                 return username_text
+            
+            return self._get_latest_follow_from_html(driver, username)
+            
         except Exception as e:
             print(f"XPath {xpath} failed: {str(e)}")
+            return self._get_latest_follow_from_html(driver, username)
+
+    def _get_latest_follow_from_html(self, driver: webdriver.Chrome, username: str) -> Optional[str]:
+        try:
+            logging.info(f"Attempting to find latest follow for @{username} using HTML parsing")
+            html_content = driver.page_source
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            spans = soup.find_all('span', class_='css-1jxf684')
+            
+            counter = 0
+            for span in spans:
+                if span.text and span.text.strip().startswith('@'):
+                    counter += 1
+                    if counter == 3: 
+                        username_text = span.text.strip()
+                        logging.info(f"Found latest follow for @{username}: from entire html scan")
+                        return username_text[1:] if username_text.startswith('@') else username_text
+                    
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error parsing HTML for latest follow of {username}: {str(e)}")
             return None
 
     def _initialize_driver(self) -> webdriver.Chrome:
