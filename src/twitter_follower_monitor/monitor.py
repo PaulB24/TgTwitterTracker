@@ -55,7 +55,7 @@ class FollowerMonitor:
         self._is_running: bool = False
         self.cookies_file = Path("twitter_cookies.json")
         self._consecutive_errors = 0
-        self._max_consecutive_errors = 10
+        self._max_consecutive_errors = 8
         self._driver_restarts = 0
         self._normal_login_attempts = 0
         self._cookie_login_attempts = 0
@@ -168,26 +168,37 @@ class FollowerMonitor:
             raise Exception(f"Failed to get following count for @{username}. Account may not exist or be private: {str(e)}")
 
     def _get_latest_follow(self, driver: webdriver.Chrome, username: str) -> Optional[str]:
-        try:
-            print(f"Checking latest follow for @{username}")
-            driver.get(f"https://twitter.com/{username}/following")
-            time.sleep(5)  
+        for attempt in range(2):
+            try:
+                logging.info(f"Checking latest follow for @{username} - XPath attempt {attempt + 1}")
+                driver.get(f"https://twitter.com/{username}/following")
+                time.sleep(5)  
 
-            xpath = '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[2]/div/a/div/div/span'
+                xpath = '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[2]/div/a/div/div/span'
 
-            element = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.XPATH, xpath)))
+                element = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.XPATH, xpath)))
                     
-            if element.text.strip():
-                username_text = element.text.strip()
-                if username_text.startswith('@'):
-                    return username_text[1:]
-                return username_text
-            
-            return self._get_latest_follow_from_html(driver, username)
-            
-        except Exception as e:
-            print(f"XPath {xpath} failed: {str(e)}")
-            return self._get_latest_follow_from_html(driver, username)
+                if element.text.strip():
+                    username_text = element.text.strip()
+                    if username_text.startswith('@'):
+                        return username_text[1:]
+                    return username_text
+                    
+            except Exception as e:
+                logging.error(f"XPath attempt {attempt + 1} failed: {str(e)}")
+                if attempt < 1:
+                    time.sleep(3)
+                    continue
+        
+        for attempt in range(2):
+            result = self._get_latest_follow_from_html(driver, username)
+            if result:
+                return result
+            if attempt < 1:
+                driver.refresh()
+                time.sleep(3)
+        
+        return None
 
     def _get_latest_follow_from_html(self, driver: webdriver.Chrome, username: str) -> Optional[str]:
         try:
@@ -205,7 +216,7 @@ class FollowerMonitor:
                         username_text = span.text.strip()
                         logging.info(f"Found latest follow for @{username}: from entire html scan")
                         return username_text[1:] if username_text.startswith('@') else username_text
-                    
+            logging.info(f"No latest follow found for @{username} from entire html scan")
             return None
             
         except Exception as e:
