@@ -358,7 +358,7 @@ class FollowerMonitor:
                             self._consecutive_errors = 0
 
                         except Exception as e:
-                            print(f"Error monitoring {username}: {str(e)}")
+                            print(f"Error monitoring {username}: {str(e)} failed attempts {self._consecutive_errors + 1}")
                             self._consecutive_errors += 1
                             if self._consecutive_errors >= self._max_consecutive_errors:
                                 driver = self._restart_driver(driver)
