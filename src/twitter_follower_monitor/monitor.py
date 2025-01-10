@@ -85,9 +85,6 @@ class FollowerMonitor:
 
     def _login(self, driver: webdriver.Chrome) -> None:
         self._cookie_login_attempts += 1
-        if self._load_cookies(driver):
-            logging.info("Successfully logged in using cookies")
-            return
 
         self._normal_login_attempts += 1
         logging.info("Attempting normal login...")
