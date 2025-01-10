@@ -215,21 +215,21 @@ class TwitterMonitorBot:
             return
         
         help_text = """
-        Available commands:
+Available commands:
 
-        /start - Start monitoring Twitter followers
-        /stop - Stop monitoring Twitter followers
-        /add_user username1 username2 ... - Add one or more users to monitor
-        /remove_user username1 username2 ... - Remove one or more users from monitoring
-        /list_users - Show all monitored users
-        /get_following username - Get current following count for a user
-        /help - Show this help message
+/start - Start monitoring Twitter followers
+/stop - Stop monitoring Twitter followers
+/add_user username1 username2 ... - Add one or more users to monitor
+/remove_user username1 username2 ... - Remove one or more users from monitoring
+/list_users - Show all monitored users
+/get_following username - Get current following count for a user
+/help - Show this help message
 
-        Examples:
-        /add_user user1 user2 user3
-        /remove_user user1 user2
-        /get_following user1
-        """
+Examples:
+/add_user user1 user2 user3
+/remove_user user1 user2
+/get_following user1
+"""
         await update.message.reply_text(help_text)
 
     def run(self) -> None:
