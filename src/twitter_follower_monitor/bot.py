@@ -210,6 +210,28 @@ class TwitterMonitorBot:
         except Exception as e:
             await update.message.reply_text(f"Error getting following count: {str(e)}")
 
+    async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._check_auth(update):
+            return
+        
+        help_text = """
+        Available commands:
+
+        /start - Start monitoring Twitter followers
+        /stop - Stop monitoring Twitter followers
+        /add_user username1 username2 ... - Add one or more users to monitor
+        /remove_user username1 username2 ... - Remove one or more users from monitoring
+        /list_users - Show all monitored users
+        /get_following username - Get current following count for a user
+        /help - Show this help message
+
+        Examples:
+        /add_user user1 user2 user3
+        /remove_user user1 user2
+        /get_following user1
+        """
+        await update.message.reply_text(help_text)
+
     def run(self) -> None:
         application = Application.builder().token(self.telegram_token).build()
 
@@ -219,5 +241,6 @@ class TwitterMonitorBot:
         application.add_handler(CommandHandler("remove_user", self.remove_user))
         application.add_handler(CommandHandler("list_users", self.list_users))
         application.add_handler(CommandHandler("get_following", self.get_following))
+        application.add_handler(CommandHandler("help", self.help))
 
         application.run_polling() 
