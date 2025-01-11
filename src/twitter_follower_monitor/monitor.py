@@ -227,13 +227,24 @@ class FollowerMonitor:
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')
-        options.add_argument("--remote-debugging-port=9222")
         options.add_argument('--window-size=1920,1080')
-        options.page_load_timeout = 30
-        options.set_capability("pageLoadStrategy", "eager")
+        options.add_argument('--disable-extensions')
+        options.add_argument('--proxy-server="direct://"')
+        options.add_argument('--proxy-bypass-list=*')
+        options.add_argument('--start-maximized')
+        options.add_argument('--disable-blink-features=AutomationControlled')
         
-        service = webdriver.ChromeService()
-        driver = webdriver.Chrome(service=service, options=options)
+        service = webdriver.ChromeService(
+            service_args=['--verbose', '--log-path=chrome.log']
+        )
+        
+        driver = webdriver.Chrome(
+            service=service,
+            options=options
+        )
+        
+        driver.set_page_load_timeout(30)
+        driver.set_script_timeout(30)
         
         try:
             self._login(driver)
@@ -254,7 +265,6 @@ class FollowerMonitor:
                 try:
                     driver.close()
                     driver.quit()
-                    time.sleep(3)
                 except:
                     pass
 
@@ -263,20 +273,30 @@ class FollowerMonitor:
                     for proc in psutil.process_iter(['pid', 'name']):
                         if 'chrome' in proc.info['name'].lower():
                             try:
-                                psutil.Process(proc.info['pid']).terminate()
+                                psutil.Process(proc.info['pid']).kill()
                             except:
                                 pass
-                    time.sleep(3)
                 except:
                     pass
 
+                time.sleep(5)
+                
+                try:
+                    import subprocess
+                    subprocess.run(['pkill', '-f', 'chrome'], check=False)
+                    subprocess.run(['pkill', '-f', 'chromedriver'], check=False)
+                except:
+                    pass
+                    
+                time.sleep(5)
+                
                 new_driver = self._initialize_driver()
                 logging.info(f"Driver successfully restarted on attempt {attempt + 1}")
                 return new_driver
 
             except Exception as e:
                 logging.error(f"Failed to restart driver on attempt {attempt + 1}: {str(e)}")
-                time.sleep(5)
+                time.sleep(10)
         
         logging.critical("Failed to restart Chrome driver after 3 attempts")
         raise Exception("Failed to restart Chrome driver after 3 attempts")
